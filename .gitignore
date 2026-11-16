@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Environment
+.env
+*.env.local
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Data / uploads
+data/raw/*
+data/processed/*
+backend/uploads/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!backend/uploads/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docker
+*.log
+
+# Temporary
+test_file.txt
+
