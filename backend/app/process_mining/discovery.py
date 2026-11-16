@@ -13,8 +13,6 @@ import uuid
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
-import pandas as pd
-
 from app.process_mining.converter import to_pm4py_dataframe
 from app.schemas.process_mining import (
     DFGResponse,

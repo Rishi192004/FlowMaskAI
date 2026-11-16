@@ -71,10 +71,12 @@ def create_app() -> FastAPI:
 
     # ── Routers ───────────────────────────────────────────
     app.include_router(api_router)
-    # Also mount /api/datasets and /api/analytics directly for convenient unqualified API access
-    from app.api.v1.endpoints import analytics, datasets
+    # Also mount /api/datasets, /api/analytics, /api/process, /api/conformance directly
+    from app.api.v1.endpoints import analytics, conformance, datasets, process
     app.include_router(datasets.router, prefix="/api")
     app.include_router(analytics.router, prefix="/api")
+    app.include_router(process.router, prefix="/api")
+    app.include_router(conformance.router, prefix="/api")
 
     # ── Exception handlers ────────────────────────────────
     register_exception_handlers(app)

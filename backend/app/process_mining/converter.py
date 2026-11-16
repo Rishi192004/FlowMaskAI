@@ -14,15 +14,15 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+# Removed top-level sqlalchemy import to allow lightweight import
+# from sqlalchemy import text
+# from sqlalchemy.orm import Session
 
-from app.models.dataset import CleanedEvent
+# Lazy import inside function if needed
 
 
 def fetch_cleaned_event_records(
-    db: Session,
+    db: Any,
     dataset_id: uuid.UUID,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -33,6 +33,7 @@ def fetch_cleaned_event_records(
     Queries cleaned_events with optional multi-dimensional filters.
     Returns deterministic, timestamp-ordered event dictionaries.
     """
+    from sqlalchemy import text
     conditions = ["dataset_id = :dataset_id"]
     params: Dict[str, Any] = {"dataset_id": str(dataset_id)}
 
@@ -104,11 +105,13 @@ def fetch_cleaned_event_records(
     return records
 
 
-def to_pm4py_dataframe(records: List[Dict[str, Any]]) -> pd.DataFrame:
+def to_pm4py_dataframe(records: List[Dict[str, Any]]):
     """
     Converts list of event dictionaries into a PM4Py-compatible pandas DataFrame.
     Applies standard PM4Py formatting when pm4py is installed.
     """
+    import pandas as pd
+
     if not records:
         df = pd.DataFrame(columns=[
             "case:concept:name",
