@@ -106,7 +106,26 @@ def evaluate_case_conformance(
                     actual="Invoice Verified executed before any Goods Received event",
                 ))
 
-    # 4. Rule Check: Repeated Approval (Rework on Approval)
+    # 4. Rule Check: Skipped Invoice Verification (Payment without Invoice Verified)
+    if getattr(rules, "require_invoice_verification", True):
+        payment_events = [ev for ev in trace if ev["concept:name"] in ("Payment Completed", "Payment Executed", "Invoice Paid")]
+        inv_verified_events = [ev for ev in trace if ev["concept:name"] == "Invoice Verified"]
+        for p_ev in payment_events:
+            p_time = p_ev["time:timestamp"]
+            prior_iv = [iv for iv in inv_verified_events if iv["time:timestamp"] <= p_time]
+            if not prior_iv:
+                deviations.append(CaseDeviationDetail(
+                    deviation_type="SKIPPED_INVOICE_VERIFICATION",
+                    severity="HIGH",
+                    description="Payment was completed without prior Invoice Verification (disbursement control bypass).",
+                    culprit_activity=p_ev["concept:name"],
+                    culprit_event_id=p_ev.get("id"),
+                    culprit_timestamp=p_time,
+                    expected="Invoice Verified preceding Payment Completed",
+                    actual=f"{p_ev['concept:name']} occurred without prior invoice verification",
+                ))
+
+    # 5. Rule Check: Repeated Approval (Rework on Approval)
     if not rules.allow_repeated_approval:
         approval_events = [ev for ev in trace if ev["concept:name"] == "Manager Approval"]
         if len(approval_events) > 1:
@@ -255,6 +274,7 @@ def get_conformance_overview_response(
     dev_type_meta = {
         "SKIPPED_APPROVAL": ("Compliance", "HIGH", "Purchase Order created without prior authorized Manager Approval."),
         "EARLY_INVOICE_VERIFICATION": ("Risk", "HIGH", "Invoice verified before goods receipt (3-way match failure)."),
+        "SKIPPED_INVOICE_VERIFICATION": ("Compliance", "HIGH", "Payment completed without prior invoice verification (disbursement control failure)."),
         "REPEATED_APPROVAL": ("Efficiency", "MEDIUM", "Manager Approval repeated multiple times causing process looping."),
         "INCOMPLETE_PROCESS": ("Quality", "MEDIUM", "Case terminated prematurely without recorded payment completion."),
         "OUT_OF_ORDER": ("Quality", "MEDIUM", "Activities executed out of standard chronological sequence."),

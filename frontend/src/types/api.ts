@@ -406,3 +406,33 @@ export interface ConformanceOverviewResponse {
   deviation_breakdown: DeviationSummaryItem[];
   active_rules: ConformanceRulesConfig;
 }
+
+export interface RecommendationItem {
+  recommendation_id: string;
+  rule_id: string;
+  category: string;
+  severity: string;
+  business_problem: string;
+  supporting_metric: string;
+  actual_metric_value: number;
+  threshold_or_baseline: string;
+  affected_case_count: number;
+  affected_case_percentage: number;
+  estimated_operational_impact: string;
+  recommended_corrective_action: string;
+  evidence_and_explanation: string;
+  estimated_impact_score: number;
+}
+
+export interface RecommendationsResponse {
+  dataset_id: string;
+  total_cases_analyzed: number;
+  recommendations_count: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  recommendations: RecommendationItem[];
+  rules_evaluated_count: number;
+  evaluation_timestamp: string;
+}

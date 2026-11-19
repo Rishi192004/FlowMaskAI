@@ -34,6 +34,10 @@ class ConformanceRulesConfig(BaseModel):
         default=True,
         description="If True, flagging cases where Invoice Verified occurs before Goods Received",
     )
+    require_invoice_verification: bool = Field(
+        default=True,
+        description="If True, flagging cases where payment occurs without prior invoice verification",
+    )
     allow_repeated_approval: bool = Field(
         default=False,
         description="If False, flagging repeated Manager Approval events as rework deviations",

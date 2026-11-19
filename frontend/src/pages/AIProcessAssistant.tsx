@@ -21,6 +21,7 @@ import {
   User,
   Zap,
 } from 'lucide-react';
+import { aiApi } from '../api/ai';
 import { analyticsApi } from '../api/analytics';
 import { conformanceApi } from '../api/conformance';
 import { processApi } from '../api/process';
@@ -33,19 +34,9 @@ import {
   ConformanceOverviewResponse,
   OverviewMetrics,
   ProcessVariantsResponse,
+  RecommendationItem,
   VendorPerformanceResponse,
 } from '../types/api';
-
-interface GroundedRecommendation {
-  ruleId: string;
-  category: 'Compliance' | 'Efficiency' | 'Quality' | 'Financial Risk';
-  severity: 'HIGH' | 'MEDIUM' | 'LOW';
-  title: string;
-  observation: string;
-  evidence: string;
-  recommendation: string;
-  estimatedImpact: string;
-}
 
 interface ChatMessage {
   id: string;
@@ -63,6 +54,7 @@ export const AIProcessAssistant: React.FC = () => {
   const [bottlenecks, setBottlenecks] = useState<BottlenecksResponse | null>(null);
   const [variants, setVariants] = useState<ProcessVariantsResponse | null>(null);
   const [vendors, setVendors] = useState<VendorPerformanceResponse | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,12 +78,13 @@ export const AIProcessAssistant: React.FC = () => {
         end_date: endDate || undefined,
       };
 
-      const [ovRes, confRes, bnRes, varRes, vendRes] = await Promise.all([
+      const [ovRes, confRes, bnRes, varRes, vendRes, recRes] = await Promise.all([
         analyticsApi.getOverview(params),
         conformanceApi.getOverview(params),
         analyticsApi.getBottlenecks(params),
         processApi.getVariants(params),
         analyticsApi.getVendorPerformance({ ...params, sla_hours: 720.0 }),
+        aiApi.getRecommendations(params),
       ]);
 
       setOverview(ovRes);
@@ -99,6 +92,7 @@ export const AIProcessAssistant: React.FC = () => {
       setBottlenecks(bnRes);
       setVariants(varRes);
       setVendors(vendRes);
+      setRecommendations(recRes.recommendations);
 
       // Initialize welcome message once grounded data is ready
       const totalC = ovRes.total_purchase_cases.toLocaleString();
@@ -152,84 +146,6 @@ export const AIProcessAssistant: React.FC = () => {
         onRetry={fetchGroundingAnalytics}
       />
     );
-  }
-
-  // ── Formulate Grounded Recommendations (Rule Catalogue) ──────────────────
-  const recommendations: GroundedRecommendation[] = [];
-
-  if (conformance && overview && bottlenecks) {
-    // Rule 1: Skipped Approval
-    const skipApprovalDev = conformance.deviation_breakdown.find(d => d.deviation_type === 'SKIPPED_APPROVAL');
-    if (skipApprovalDev && skipApprovalDev.affected_cases > 0) {
-      recommendations.push({
-        ruleId: 'SKIP_APPROVAL',
-        category: 'Compliance',
-        severity: 'HIGH',
-        title: 'Unauthorized Purchase Orders (Skipped Manager Approvals)',
-        observation: `${skipApprovalDev.affected_cases} cases (${skipApprovalDev.percentage_of_cases}% of total) bypassed mandatory manager approval before purchase orders were created.`,
-        evidence: `Deviation Type: SKIPPED_APPROVAL | Affected Cases: ${skipApprovalDev.affected_cases} | Severity: HIGH`,
-        recommendation: 'Configure automated approval gating in the ERP system to prevent PO issuance prior to recorded cryptographic or digital manager sign-off.',
-        estimatedImpact: 'High compliance control integrity; mitigates unbudgeted capital expenditure risk.',
-      });
-    }
-
-    // Rule 2: Early Invoice Verification
-    const earlyInvDev = conformance.deviation_breakdown.find(d => d.deviation_type === 'EARLY_INVOICE_VERIFICATION');
-    if (earlyInvDev && earlyInvDev.affected_cases > 0) {
-      recommendations.push({
-        ruleId: 'EARLY_INVOICE',
-        category: 'Financial Risk',
-        severity: 'HIGH',
-        title: 'Three-Way Matching Control Failure (Early Invoicing)',
-        observation: `${earlyInvDev.affected_cases} cases verified vendor invoices prior to physical goods receipt confirmation.`,
-        evidence: `Deviation Type: EARLY_INVOICE_VERIFICATION | Affected Cases: ${earlyInvDev.affected_cases} | Control: 3-Way Match`,
-        recommendation: 'Enforce hard system stop on accounts payable verification until receiving warehouse logs goods receipt status.',
-        estimatedImpact: 'Eliminates duplicate payments and premature supplier liabilities.',
-      });
-    }
-
-    // Rule 3: High Rework Rate
-    if (overview.rework_percentage > 0.05) {
-      recommendations.push({
-        ruleId: 'HIGH_REWORK',
-        category: 'Quality',
-        severity: overview.rework_percentage > 0.15 ? 'HIGH' : 'MEDIUM',
-        title: 'Excessive Rework & Redundant Activity Loops',
-        observation: `${overview.rework_cases} cases (${(overview.rework_percentage * 100).toFixed(1)}%) revisited activities multiple times, primarily within approvals or verifications.`,
-        evidence: `Rework Cases: ${overview.rework_cases} (${(overview.rework_percentage * 100).toFixed(1)}% of volume)`,
-        recommendation: 'Standardize procurement requisition templates to minimize incomplete submissions that trigger revision loops.',
-        estimatedImpact: `Potential cycle time reduction of ${(overview.avg_cycle_time_hours * 0.15).toFixed(1)} hours per case.`,
-      });
-    }
-
-    // Rule 4: Primary Bottleneck
-    const topBottleneck = bottlenecks.bottlenecks[0];
-    if (topBottleneck && topBottleneck.avg_waiting_time_hours > 24) {
-      recommendations.push({
-        ruleId: 'APPROVAL_BOTTLENECK',
-        category: 'Efficiency',
-        severity: 'MEDIUM',
-        title: `Queue Delay at Stage: ${topBottleneck.activity}`,
-        observation: `Average queue waiting time before '${topBottleneck.activity}' is ${topBottleneck.avg_waiting_time_hours.toFixed(1)} hours (SLA breach rate: ${(topBottleneck.sla_breach_rate * 100).toFixed(1)}%).`,
-        evidence: `Bottleneck Activity: ${topBottleneck.activity} | Waiting Time: ${topBottleneck.avg_waiting_time_hours.toFixed(1)}h | Severity Score: ${topBottleneck.bottleneck_score}`,
-        recommendation: 'Implement automated task reassignment, mobile notification escalation, and tiered sign-off thresholds for faster review.',
-        estimatedImpact: `Estimated throughput acceleration by ~${(topBottleneck.avg_waiting_time_hours * 0.4).toFixed(1)} hours per case.`,
-      });
-    }
-
-    // Rule 5: SLA Breaches
-    if (overview.sla_breach_percentage > 0.10) {
-      recommendations.push({
-        ruleId: 'SLA_BREACH',
-        category: 'Efficiency',
-        severity: 'HIGH',
-        title: 'Systemic Procurement SLA Non-Compliance',
-        observation: `${overview.sla_breach_cases} cases (${(overview.sla_breach_percentage * 100).toFixed(1)}%) exceeded the 720-hour operational SLA.`,
-        evidence: `SLA Threshold: ${overview.sla_hours}h | Breach Count: ${overview.sla_breach_cases} (${(overview.sla_breach_percentage * 100).toFixed(1)}%)`,
-        recommendation: 'Establish automated SLA milestone alerts at 50% and 75% elapsed time to prevent late vendor disbursements.',
-        estimatedImpact: 'Improves supplier relationship satisfaction and captures early payment discounts.',
-      });
-    }
   }
 
   // ── Handle Assistant Conversation Queries ───────────────────────────────
@@ -367,9 +283,9 @@ export const AIProcessAssistant: React.FC = () => {
           icon={<Clock className="w-4 h-4 text-amber-400" />}
         />
         <MetricCard
-          title="Identified Action Items"
+          title="Prioritized Action Items"
           value={recommendations.length}
-          subtext="Ranked evidence-backed recommendations"
+          subtext="Grounded recommendations from backend engine"
           icon={<Lightbulb className="w-4 h-4 text-indigo-400" />}
         />
       </div>
@@ -510,7 +426,7 @@ export const AIProcessAssistant: React.FC = () => {
               Prescriptive Recommendations
             </h2>
             <span className="text-[11px] text-slate-400 font-mono">
-              {recommendations.length} items triggered
+              {recommendations.length} rules triggered
             </span>
           </div>
 
@@ -523,43 +439,47 @@ export const AIProcessAssistant: React.FC = () => {
           ) : (
             recommendations.map(rec => (
               <div
-                key={rec.ruleId}
+                key={rec.recommendation_id}
                 className="bg-surface-card border border-surface-border hover:border-slate-700 rounded-xl p-4 space-y-3 transition-colors shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold uppercase ${
-                        rec.severity === 'HIGH' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        rec.severity === 'CRITICAL' || rec.severity === 'HIGH'
+                          ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                       }`}>
-                        {rec.severity} {rec.category}
+                        {rec.severity} • {rec.category}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500">{rec.ruleId}</span>
+                      <span className="text-[10px] font-mono text-slate-500">{rec.rule_id}</span>
                     </div>
-                    <h3 className="text-xs font-bold text-slate-100">{rec.title}</h3>
+                    <h3 className="text-xs font-bold text-slate-100">{rec.business_problem}</h3>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  {rec.observation}
-                </p>
+                <div className="text-[11px] text-slate-300 leading-relaxed">
+                  <span className="text-slate-400">Impacted Cases: </span>
+                  <span className="font-mono font-semibold text-white">{rec.affected_case_count.toLocaleString()}</span>
+                  <span className="text-slate-400"> ({rec.affected_case_percentage.toFixed(1)}% of volume)</span>
+                </div>
 
                 {/* Evidence Box */}
                 <div className="bg-[#0A0E18] border border-surface-border rounded p-2 text-[10px] font-mono text-indigo-300">
                   <span className="text-slate-400 font-semibold block mb-0.5">Calculated Evidence:</span>
-                  {rec.evidence}
+                  {rec.evidence_and_explanation}
                 </div>
 
                 {/* Prescriptive Action */}
                 <div className="bg-surface border-l-2 border-indigo-500 p-2.5 rounded-r text-[11px] text-slate-200">
                   <span className="font-semibold text-indigo-400 block mb-0.5">Recommended Action:</span>
-                  {rec.recommendation}
+                  {rec.recommended_corrective_action}
                 </div>
 
                 {/* Expected Impact */}
                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  <span>Impact: {rec.estimatedImpact}</span>
+                  <span>Impact: {rec.estimated_operational_impact}</span>
                 </div>
               </div>
             ))
