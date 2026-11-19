@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -89,11 +89,14 @@ def update(
 @router.delete(
     "/{project_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    response_class=Response,
     summary="Delete a project and all its data",
 )
 def delete(
     project_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> None:
+) -> Response:
     delete_project(db, project_id, current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

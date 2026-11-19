@@ -1,6 +1,7 @@
 """Intent classification and evidence assembly for the process assistant."""
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from typing import List
@@ -8,7 +9,7 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from app.ai.engine import generate_recommendations
-from app.ai.llm import generate_grounded_answer
+from app.ai.llm import AssistantGenerationError, generate_grounded_answer
 from app.analytics.service import (
     get_bottleneck_analytics,
     get_overview_analytics,
@@ -26,6 +27,8 @@ from app.schemas.ai import (
     AssistantQueryResponse,
     RecommendationItem,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def classify_assistant_intent(question: str) -> AssistantIntentEnum:
@@ -53,6 +56,20 @@ def classify_assistant_intent(question: str) -> AssistantIntentEnum:
     ):
         return AssistantIntentEnum.CYCLE_TIME
     return AssistantIntentEnum.UNSUPPORTED
+
+
+def _is_greeting(question: str) -> bool:
+    normalized = " ".join(question.casefold().split()).strip("!.,?")
+    return normalized in {
+        "hi",
+        "hello",
+        "hey",
+        "hi flowmind",
+        "hello flowmind",
+        "good morning",
+        "good afternoon",
+        "good evening",
+    }
 
 
 def _fact(
@@ -94,13 +111,23 @@ def _generate_response(
     baselines: List[AssistantMetricFact],
     recommendations: List[RecommendationItem],
 ) -> AssistantQueryResponse:
-    answer = generate_grounded_answer(
-        request.question,
-        intent.value,
-        facts,
-        baselines,
-        recommendations,
-    )
+    try:
+        answer = generate_grounded_answer(
+            request.question,
+            intent.value,
+            facts,
+            baselines,
+            recommendations,
+        )
+        generation_model = settings.OLLAMA_MODEL
+    except AssistantGenerationError as exc:
+        logger.warning("Could not generate grounded assistant narrative: %s", exc)
+        answer = (
+            "The measured facts and recommendations are available below, but the "
+            "local model could not provide a safe narrative."
+        )
+        generation_model = None
+
     return AssistantQueryResponse(
         dataset_id=request.dataset_id,
         intent=intent,
@@ -109,7 +136,7 @@ def _generate_response(
         measured_facts=facts,
         configured_baselines=baselines,
         recommendations=recommendations,
-        generation_model=settings.OLLAMA_MODEL,
+        generation_model=generation_model,
     )
 
 
@@ -123,6 +150,13 @@ def answer_assistant_query(
         raise NotFoundError(f"Dataset '{request.dataset_id}' not found.")
 
     if intent == AssistantIntentEnum.UNSUPPORTED:
+        if _is_greeting(request.question):
+            return _unavailable_response(
+                request.dataset_id,
+                intent,
+                "Hi! I can help analyze this process dataset. Try asking about bottlenecks, "
+                "vendor SLA breaches, cycle time, rework, conformance, or management priorities.",
+            )
         return _unavailable_response(
             request.dataset_id,
             intent,

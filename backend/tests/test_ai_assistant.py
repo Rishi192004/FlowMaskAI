@@ -93,6 +93,32 @@ def test_query_returns_measured_facts_separately_from_llm(
     assert fact_map["bottleneck.1.average_wait_hours"]["value"] == 2.0
 
 
+def test_query_returns_measured_facts_when_safe_narrative_generation_fails(
+    client: TestClient, assistant_dataset: Dataset, monkeypatch
+):
+    def reject_narrative(*_args):
+        raise AssistantGenerationError(
+            "Ollama returned an unsupported numeric claim; the answer was rejected."
+        )
+
+    monkeypatch.setattr("app.ai.assistant.generate_grounded_answer", reject_narrative)
+    response = client.post(
+        "/api/v1/ai/assistant/query",
+        json={
+            "dataset_id": str(assistant_dataset.id),
+            "question": "What is cycle time?",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["generation_model"] is None
+    assert "could not provide a safe narrative" in body["answer"]
+    fact_map = {fact["key"]: fact for fact in body["measured_facts"]}
+    assert fact_map["cycle_time.average_hours"]["value"] == 2.0
+
+
 def test_query_returns_configured_sla_baseline_separately(
     client: TestClient, assistant_dataset: Dataset, monkeypatch
 ):
@@ -143,6 +169,26 @@ def test_unknown_questions_return_unavailable_without_calling_the_llm(
     assert body["available"] is False
     assert body["intent"] == "UNSUPPORTED"
     assert "can't answer" in body["answer"]
+    assert body["measured_facts"] == []
+
+
+def test_greeting_returns_supported_topics_without_calling_the_llm(
+    client: TestClient, assistant_dataset: Dataset, monkeypatch
+):
+    def fail_if_called(*_args):
+        raise AssertionError("A greeting must not call Ollama.")
+
+    monkeypatch.setattr("app.ai.assistant.generate_grounded_answer", fail_if_called)
+    response = client.post(
+        "/api/v1/ai/assistant/query",
+        json={"dataset_id": str(assistant_dataset.id), "question": "hi"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["intent"] == "UNSUPPORTED"
+    assert body["answer"].startswith("Hi!")
     assert body["measured_facts"] == []
 
 
