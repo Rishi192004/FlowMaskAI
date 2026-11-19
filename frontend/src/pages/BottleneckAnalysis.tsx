@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Clock, HelpCircle, Layers, Timer, TrendingUp } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { analyticsApi } from '../../api/analytics';
-import { DataTable } from '../../components/common/DataTable';
-import { EmptyState, ErrorState, LoadingState } from '../../components/common/FeedbackStates';
-import { MetricCard } from '../../components/common/MetricCard';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { useFilters } from '../../context/FilterContext';
-import { BottleneckItem, BottlenecksResponse, WaitingTimeMetrics } from '../../types/api';
+import { analyticsApi } from '../api/analytics';
+import { DataTable } from '../components/common/DataTable';
+import { EmptyState, ErrorState, LoadingState } from '../components/common/FeedbackStates';
+import { MetricCard } from '../components/common/MetricCard';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { useFilters } from '../context/FilterContext';
+import { BottleneckItem, BottlenecksResponse, WaitingTimeMetrics } from '../types/api';
 
 export const BottleneckAnalysis: React.FC = () => {
   const { selectedDatasetId, selectedDataset, startDate, endDate } = useFilters();

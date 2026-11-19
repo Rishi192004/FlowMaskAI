@@ -4,7 +4,7 @@
  */
 
 export interface RequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | undefined | null>;
+  params?: Record<string, any>;
 }
 
 export class ApiError extends Error {

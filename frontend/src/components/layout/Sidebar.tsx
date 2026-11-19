@@ -30,8 +30,20 @@ interface SidebarProps {
   onSelectTab: (tab: NavTab) => void;
 }
 
+interface NavItem {
+  id: NavTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
-  const navSections = [
+  const navSections: NavSection[] = [
     {
       title: 'Operational Monitoring',
       items: [

@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { Check, Database, FileSpreadsheet, Play, Trash2, UploadCloud } from 'lucide-react';
-import { datasetsApi } from '../../api/datasets';
-import { DataTable } from '../../components/common/DataTable';
-import { ErrorState } from '../../components/common/FeedbackStates';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { useFilters } from '../../context/FilterContext';
-import { Dataset, DatasetUploadResponse } from '../../types/api';
+import { datasetsApi } from '../api/datasets';
+import { DataTable } from '../components/common/DataTable';
+import { ErrorState } from '../components/common/FeedbackStates';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { useFilters } from '../context/FilterContext';
+import { Dataset, DatasetUploadResponse } from '../types/api';
 
 interface DatasetManagementProps {
   onNavigateToETL?: () => void;

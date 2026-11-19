@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, Database, FileText, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { datasetsApi } from '../../api/datasets';
-import { DataTable } from '../../components/common/DataTable';
-import { EmptyState, ErrorState, LoadingState } from '../../components/common/FeedbackStates';
-import { MetricCard } from '../../components/common/MetricCard';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { useFilters } from '../../context/FilterContext';
-import { DataQualityIssueItem, DataQualityReport } from '../../types/api';
+import { datasetsApi } from '../api/datasets';
+import { DataTable } from '../components/common/DataTable';
+import { EmptyState, ErrorState, LoadingState } from '../components/common/FeedbackStates';
+import { MetricCard } from '../components/common/MetricCard';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { useFilters } from '../context/FilterContext';
+import { DataQualityIssueItem, DataQualityReport } from '../types/api';
 
 export const DataQualityReportPage: React.FC = () => {
   const { selectedDatasetId, selectedDataset } = useFilters();

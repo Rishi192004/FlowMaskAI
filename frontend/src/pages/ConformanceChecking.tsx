@@ -10,19 +10,19 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { conformanceApi } from '../../api/conformance';
-import { DataTable } from '../../components/common/DataTable';
-import { EmptyState, ErrorState, LoadingState } from '../../components/common/FeedbackStates';
-import { MetricCard } from '../../components/common/MetricCard';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { useFilters } from '../../context/FilterContext';
+import { conformanceApi } from '../api/conformance';
+import { DataTable } from '../components/common/DataTable';
+import { EmptyState, ErrorState, LoadingState } from '../components/common/FeedbackStates';
+import { MetricCard } from '../components/common/MetricCard';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { useFilters } from '../context/FilterContext';
 import {
   CaseDeviationItem,
   CaseDeviationsListResponse,
   ConformanceOverviewResponse,
   ConformanceRulesConfig,
   DeviationSummaryItem,
-} from '../../types/api';
+} from '../types/api';
 
 export const ConformanceChecking: React.FC = () => {
   const { selectedDatasetId, selectedDataset, startDate, endDate } = useFilters();

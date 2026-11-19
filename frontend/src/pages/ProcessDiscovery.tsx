@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, ArrowRight, Layers, Sparkles, X } from 'lucide-react';
-import { processApi } from '../../api/process';
-import { EmptyState, ErrorState, LoadingState } from '../../components/common/FeedbackStates';
-import { MetricCard } from '../../components/common/MetricCard';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { ProcessMapCanvas } from '../../components/process/ProcessMapCanvas';
-import { useFilters } from '../../context/FilterContext';
-import { ProcessDiscoveryResponse, ProcessMapNode, ProcessMapResponse } from '../../types/api';
+import { processApi } from '../api/process';
+import { EmptyState, ErrorState, LoadingState } from '../components/common/FeedbackStates';
+import { MetricCard } from '../components/common/MetricCard';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { ProcessMapCanvas } from '../components/process/ProcessMapCanvas';
+import { useFilters } from '../context/FilterContext';
+import { ProcessDiscoveryResponse, ProcessMapNode, ProcessMapResponse } from '../types/api';
 
 export const ProcessDiscovery: React.FC = () => {
   const { selectedDatasetId, selectedDataset, startDate, endDate, selectedDepartment, selectedVendor } = useFilters();

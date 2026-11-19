@@ -245,6 +245,32 @@ export interface ProcessMapResponse {
   end_activities: Record<string, number>;
 }
 
+export interface PetriNetPlace {
+  id: string;
+  name: string;
+}
+
+export interface PetriNetTransition {
+  id: string;
+  label?: string | null;
+}
+
+export interface PetriNetArc {
+  source: string;
+  target: string;
+}
+
+export interface ProcessDiscoveryResponse {
+  dataset_id: string;
+  algorithm: string;
+  places: PetriNetPlace[];
+  transitions: PetriNetTransition[];
+  arcs: PetriNetArc[];
+  start_activities: Record<string, number>;
+  end_activities: Record<string, number>;
+  process_tree_repr?: string | null;
+}
+
 export interface DFGTransition {
   source: string;
   target: string;
