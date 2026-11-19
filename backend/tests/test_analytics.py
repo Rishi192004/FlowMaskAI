@@ -124,7 +124,8 @@ def verified_dataset(db: Session) -> Dataset:
         ),
     ]
 
-    for ev in events:
+    for event_id, ev in enumerate(events, start=1):
+        ev.id = event_id
         db.add(ev)
     db.commit()
 

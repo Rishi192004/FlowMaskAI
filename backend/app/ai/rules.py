@@ -5,14 +5,12 @@ Zero fabrication: parameterized templates populate from real case counts and cal
 """
 from __future__ import annotations
 
-import math
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from app.schemas.ai import (
     RecommendationCategoryEnum,
     RecommendationItem,
     RecommendationsConfig,
-    RecommendationSeverityEnum,
 )
 from app.schemas.analytics import BottlenecksResponse, OverviewMetrics, ReworkMetrics
 from app.schemas.conformance import ConformanceOverviewResponse
@@ -65,21 +63,20 @@ def evaluate_skip_approval(
         category=RecommendationCategoryEnum.COMPLIANCE.value,
         severity=severity,
         business_problem=(
-            "Unauthorized Purchase Orders issued without mandatory managerial approval "
-            "prior to commitment generation."
+            "Purchase orders were recorded without a preceding manager-approval event in the case history."
         ),
         supporting_metric="skipped_approval_case_percentage",
         actual_metric_value=actual_pct,
-        threshold_or_baseline=f"Threshold: > {config.skip_approval_threshold * 100:.1f}% (Zero tolerance compliance policy)",
+        threshold_or_baseline=f"Configured threshold: > {config.skip_approval_threshold * 100:.1f}%",
         affected_case_count=affected_count,
         affected_case_percentage=round_num(actual_pct * 100.0, 2),
         estimated_operational_impact=(
-            f"Exposes organization to unauthorized procurement liability across {affected_count:,} cases "
-            f"({actual_pct * 100.0:.1f}% of volume). Bypasses budgetary governance and capital expenditure controls."
+            f"{affected_count:,} of {total_cases:,} cases ({actual_pct * 100.0:.1f}%) "
+            f"have no recorded approval before purchase-order creation."
         ),
         recommended_corrective_action=(
             "Implement automated ERP approval gating that prohibits PO release until digital manager sign-off is logged. "
-            "Audit all {affected_count:,} unapproved orders for retroactive ratification or supplier contract cancellations."
+            f"Audit all {affected_count:,} unapproved orders for retroactive ratification or supplier contract cancellations."
         ),
         evidence_and_explanation=(
             f"Audit replay flagged {affected_count:,} cases where 'Purchase Order Created' occurred with zero preceding "
@@ -123,17 +120,16 @@ def evaluate_early_invoice(
         category=RecommendationCategoryEnum.FINANCIAL_RISK.value,
         severity=severity,
         business_problem=(
-            "Invoices verified and scheduled for disbursement prior to physical goods receipt confirmation, "
-            "violating the fundamental three-way matching control."
+            "Invoice verification was recorded before goods receipt in affected cases."
         ),
         supporting_metric="early_invoice_verification_case_percentage",
         actual_metric_value=actual_pct,
-        threshold_or_baseline=f"Threshold: > {config.early_invoice_threshold * 100:.1f}% (Zero-tolerance financial control)",
+        threshold_or_baseline=f"Configured threshold: > {config.early_invoice_threshold * 100:.1f}%",
         affected_case_count=affected_count,
         affected_case_percentage=round_num(actual_pct * 100.0, 2),
         estimated_operational_impact=(
-            f"Direct exposure to erroneous or premature disbursements on unfulfilled orders across {affected_count:,} cases. "
-            f"Increases risk of supplier disputes and duplicate payments."
+            f"The three-way-match sequence was not observed in {affected_count:,} cases "
+            f"({actual_pct * 100.0:.1f}% of analyzed cases)."
         ),
         recommended_corrective_action=(
             "Enforce hard system control in Accounts Payable software preventing invoice verification queue entry until "
@@ -181,17 +177,16 @@ def evaluate_skip_verification(
         category=RecommendationCategoryEnum.COMPLIANCE.value,
         severity=severity,
         business_problem=(
-            "Disbursements released without recorded Accounts Payable invoice verification, "
-            "bypassing price and quantity reconciliation."
+            "Payments were recorded without a preceding invoice-verification event."
         ),
         supporting_metric="skipped_invoice_verification_case_percentage",
         actual_metric_value=actual_pct,
-        threshold_or_baseline=f"Threshold: > {config.skip_verification_threshold * 100:.1f}% (Compliance mandate)",
+        threshold_or_baseline=f"Configured threshold: > {config.skip_verification_threshold * 100:.1f}%",
         affected_case_count=affected_count,
         affected_case_percentage=round_num(actual_pct * 100.0, 2),
         estimated_operational_impact=(
-            f"Payment execution without verification in {affected_count:,} cases creates audit exposure and potential "
-            f"untracked invoice variance liabilities."
+            f"{affected_count:,} payment cases ({actual_pct * 100.0:.1f}% of analyzed cases) "
+            f"have no preceding invoice-verification record."
         ),
         recommended_corrective_action=(
             "Require verified invoice audit ID as a mandatory cryptographic prerequisite before automated payment batch generation."
@@ -222,8 +217,9 @@ def evaluate_high_rework(
         return None
 
     rework_cases = overview.rework_cases
-    top_act = rework.activities[0].activity if rework.activities else "Manager Approval"
-    top_act_cases = rework.activities[0].rework_case_count if rework.activities else rework_cases
+    top_activity = rework.activities[0] if rework.activities else None
+    top_act = top_activity.activity if top_activity else None
+    top_act_cases = top_activity.rework_case_count if top_activity else None
 
     severity = "HIGH" if rework_pct > 0.15 else "MEDIUM"
     weight = SEVERITY_WEIGHTS[severity]
@@ -235,26 +231,33 @@ def evaluate_high_rework(
         category=RecommendationCategoryEnum.QUALITY.value,
         severity=severity,
         business_problem=(
-            "Excessive process looping and rework cycles observed, requiring redundant reviews "
-            "and duplicate approvals on identical cases."
+            "Repeated activity executions exceed the configured rework-rate threshold."
         ),
         supporting_metric="rework_case_percentage",
         actual_metric_value=rework_pct,
-        threshold_or_baseline=f"Threshold: > {config.high_rework_threshold * 100:.1f}% (Industry benchmark: < 8.0%)",
+        threshold_or_baseline=f"Configured threshold: > {config.high_rework_threshold * 100:.1f}%",
         affected_case_count=rework_cases,
         affected_case_percentage=round_num(rework_pct * 100.0, 2),
         estimated_operational_impact=(
             f"Rework affected {rework_cases:,} cases ({rework_pct * 100.0:.1f}% of volume), generating "
-            f"{rework.total_rework_events:,} extra event executions. Adds an estimated "
-            f"{overview.avg_cycle_time_hours * 0.18:.1f} hours of avoidable administrative latency per case."
+            f"{rework.total_rework_events:,} repeated event executions."
         ),
         recommended_corrective_action=(
-            f"Redesign submission validation for '{top_act}' to enforce first-time-right data entry. "
-            f"Introduce standardized requisition forms to eliminate repeated revision cycles."
+            (
+                f"Review validation and handoffs for '{top_act}' and identify why it repeats."
+                if top_act
+                else "Review repeated activity patterns and identify the causes of rework."
+            )
         ),
         evidence_and_explanation=(
-            f"Analysis detected {rework.total_rework_events:,} redundant executions across {rework_cases:,} cases. "
-            f"The primary activity driving rework is '{top_act}', accounting for {top_act_cases:,} looped cases."
+            (
+                f"Analysis detected {rework.total_rework_events:,} repeated event executions across "
+                f"{rework_cases:,} cases. The most frequent repeated activity was '{top_act}', "
+                f"present in {top_act_cases:,} cases."
+                if top_act
+                else f"Analysis detected {rework.total_rework_events:,} repeated event executions "
+                f"across {rework_cases:,} cases."
+            )
         ),
         estimated_impact_score=impact_score,
     )
@@ -274,17 +277,21 @@ def evaluate_approval_bottleneck(
         return None
 
     app_bn = next(
-        (b for b in bottlenecks.bottlenecks if "Approval" in b.activity or b.rank == 1),
-        bottlenecks.bottlenecks[0],
+        (b for b in bottlenecks.bottlenecks if b.activity.casefold() == "manager approval"),
+        None,
     )
-
-    actual_wait = app_bn.avg_waiting_time_hours
-    if actual_wait <= config.approval_bottleneck_hours:
+    if app_bn is None:
         return None
 
-    affected_count = app_bn.transition_count
-    total_cases = max(1, overview.total_purchase_cases)
-    affected_pct = round_num(min(1.0, affected_count / total_cases))
+    actual_wait = app_bn.avg_waiting_time_hours
+    if actual_wait <= config.approval_bottleneck_hours or app_bn.affected_case_count == 0:
+        return None
+
+    affected_count = app_bn.affected_case_count
+    total_cases = overview.total_purchase_cases
+    if total_cases == 0:
+        return None
+    affected_pct = round_num(affected_count / total_cases)
 
     severity = "HIGH" if actual_wait > 48.0 else "MEDIUM"
     weight = SEVERITY_WEIGHTS[severity]
@@ -296,26 +303,25 @@ def evaluate_approval_bottleneck(
         category=RecommendationCategoryEnum.EFFICIENCY.value,
         severity=severity,
         business_problem=(
-            f"Severe queue waiting delay concentrated at stage '{app_bn.activity}', "
-            f"acting as the primary process bottleneck."
+            f"Approval-stage queue waiting exceeds the configured threshold at '{app_bn.activity}'."
         ),
         supporting_metric="manager_approval_avg_waiting_time_hours",
         actual_metric_value=actual_wait,
-        threshold_or_baseline=f"Threshold: > {config.approval_bottleneck_hours:.1f}h SLA (Benchmark: 24.0h)",
+        threshold_or_baseline=f"Configured threshold: > {config.approval_bottleneck_hours:.1f} hours",
         affected_case_count=affected_count,
         affected_case_percentage=round_num(affected_pct * 100.0, 2),
         estimated_operational_impact=(
             f"Cases spend an average of {actual_wait:.1f} hours (median: {app_bn.median_waiting_time_hours:.1f}h) "
-            f"waiting in queue before '{app_bn.activity}', contributing {(actual_wait / max(1.0, overview.avg_cycle_time_hours)) * 100.0:.1f}% "
-            f"to overall procurement duration."
+            f"waiting before '{app_bn.activity}' across {affected_count:,} affected cases."
         ),
         recommended_corrective_action=(
-            "Establish auto-delegation rules for managers absent > 24 hours, implement mobile push authorization, "
-            "and establish tiered approval limits so small purchases (< $1,000) bypass senior manager queues."
+            "Review the approval queue, clarify ownership and escalation paths, and consider routing rules "
+            "for approvals that remain pending."
         ),
         evidence_and_explanation=(
-            f"Directly-Follows Graph and timestamp transition analysis ranked '{app_bn.activity}' as bottleneck #{app_bn.rank} "
-            f"with a severity score of {app_bn.bottleneck_score:.1f} across {affected_count:,} transitions."
+            f"Timestamp transition analysis measured a {actual_wait:.1f}-hour average wait at "
+            f"'{app_bn.activity}' across {app_bn.transition_count:,} transitions and "
+            f"{affected_count:,} distinct cases."
         ),
         estimated_impact_score=impact_score,
     )
@@ -323,8 +329,8 @@ def evaluate_approval_bottleneck(
 
 # ── 6. LOW_FPY ────────────────────────────────────────────────────────────────
 def evaluate_low_fpy(
-    conformance: ConformanceOverviewResponse,
     overview: OverviewMetrics,
+    first_pass_case_count: int,
     config: RecommendationsConfig,
 ) -> Optional[RecommendationItem]:
     """
@@ -334,18 +340,15 @@ def evaluate_low_fpy(
     total_cases = overview.total_purchase_cases
     if total_cases == 0:
         return None
+    if not 0 <= first_pass_case_count <= total_cases:
+        raise ValueError("first_pass_case_count must be between zero and total_purchase_cases")
 
-    # First Pass Yield = conformant cases that also had zero rework
-    # Conservative calculation grounded in actual counts:
-    # Non-first-pass cases = total_cases - conformant_cases + (cases conformant but reworked)
-    # We compute actual FPY = conformant_cases / total_cases * (1 - rework_percentage)
-    raw_conformant_rate = conformance.conformance_percentage / 100.0
-    fpy = round_num(raw_conformant_rate * (1.0 - overview.rework_percentage), 4)
+    fpy = round_num(first_pass_case_count / total_cases, 4)
 
     if fpy >= config.low_fpy_threshold:
         return None
 
-    non_fpy_cases = max(0, int(total_cases * (1.0 - fpy)))
+    non_fpy_cases = total_cases - first_pass_case_count
     non_fpy_pct = round_num((1.0 - fpy) * 100.0, 2)
 
     severity = "HIGH" if fpy < 0.60 else "MEDIUM"
@@ -358,25 +361,25 @@ def evaluate_low_fpy(
         category=RecommendationCategoryEnum.QUALITY.value,
         severity=severity,
         business_problem=(
-            f"Depressed First Pass Yield (FPY): only {fpy * 100.0:.1f}% of purchase orders navigate "
-            f"the end-to-end P2P lifecycle on the first attempt without deviation or rework."
+            f"First Pass Yield is {fpy * 100.0:.1f}%: the share of cases conformant on the first pass "
+            f"and without repeated activity is below the configured target."
         ),
         supporting_metric="first_pass_yield",
         actual_metric_value=fpy,
-        threshold_or_baseline=f"Threshold: < {config.low_fpy_threshold * 100:.1f}% (Target operational standard: 80.0%)",
+        threshold_or_baseline=f"Configured threshold: < {config.low_fpy_threshold * 100:.1f}%",
         affected_case_count=non_fpy_cases,
         affected_case_percentage=non_fpy_pct,
         estimated_operational_impact=(
-            f"{non_fpy_cases:,} cases ({non_fpy_pct:.1f}% of volume) required manual intervention, rework, or "
-            f"compliance reconciliation, creating operational drag across finance and procurement teams."
+            f"{first_pass_case_count:,} of {total_cases:,} cases were first-pass conformant; "
+            f"{non_fpy_cases:,} cases ({non_fpy_pct:.1f}%) had at least one deviation or repeated activity."
         ),
         recommended_corrective_action=(
             "Introduce straight-through processing (STP) for standard catalog items, enforce pre-validated vendor profiles, "
             "and eliminate discretionary manual steps from low-risk purchase categories."
         ),
         evidence_and_explanation=(
-            f"Computed First Pass Yield is {fpy * 100.0:.1f}% based on {conformance.conformant_cases:,} conformant cases "
-            f"adjusted for an operational rework rate of {overview.rework_percentage * 100.0:.1f}% across {total_cases:,} total cases."
+            f"Computed First Pass Yield is {fpy * 100.0:.1f}%: {first_pass_case_count:,} cases were conformant "
+            f"and had no repeated activities, out of {total_cases:,} cases."
         ),
         estimated_impact_score=impact_score,
     )
@@ -395,41 +398,41 @@ def evaluate_high_abandonment(
     if total_cases == 0:
         return None
 
-    abandoned_cases = overview.incomplete_cases
-    abandonment_rate = round_num(abandoned_cases / total_cases, 4)
+    incomplete_cases = overview.incomplete_cases
+    incomplete_rate = round_num(incomplete_cases / total_cases, 4)
 
-    if abandonment_rate <= config.high_abandonment_threshold:
+    if incomplete_rate <= config.high_abandonment_threshold:
         return None
 
-    severity = "HIGH" if abandonment_rate > 0.10 else "MEDIUM"
+    severity = "HIGH" if incomplete_rate > 0.10 else "MEDIUM"
     weight = SEVERITY_WEIGHTS[severity]
-    impact_score = round_num(weight * (abandonment_rate * 100.0) + (abandoned_cases * 0.05), 2)
+    impact_score = round_num(weight * (incomplete_rate * 100.0) + (incomplete_cases * 0.05), 2)
 
     return RecommendationItem(
-        recommendation_id=f"REC-ABANDONMENT-{abandoned_cases:03d}",
+        recommendation_id=f"REC-ABANDONMENT-{incomplete_cases:03d}",
         rule_id="HIGH_ABANDONMENT",
         category=RecommendationCategoryEnum.EFFICIENCY.value,
         severity=severity,
         business_problem=(
-            "High rate of procurement order abandonment: initiated purchase requisitions/orders stall "
-            "indefinitely without reaching payment completion."
+            "A high share of observed cases has no payment-completion event in the available event log."
         ),
-        supporting_metric="case_abandonment_rate",
-        actual_metric_value=abandonment_rate,
-        threshold_or_baseline=f"Threshold: > {config.high_abandonment_threshold * 100:.1f}% (Target: < 5.0%)",
-        affected_case_count=abandoned_cases,
-        affected_case_percentage=round_num(abandonment_rate * 100.0, 2),
+        supporting_metric="incomplete_case_rate",
+        actual_metric_value=incomplete_rate,
+        threshold_or_baseline=f"Configured threshold: > {config.high_abandonment_threshold * 100:.1f}%",
+        affected_case_count=incomplete_cases,
+        affected_case_percentage=round_num(incomplete_rate * 100.0, 2),
         estimated_operational_impact=(
-            f"Represents sunk effort in creating {abandoned_cases:,} unresolved orders ({abandonment_rate * 100.0:.1f}%). "
-            f"Leaves commitments unfulfilled and leads to inaccurate working capital forecasting."
+            f"{incomplete_cases:,} of {total_cases:,} observed cases ({incomplete_rate * 100.0:.1f}%) "
+            f"have no recorded payment-completion event."
         ),
         recommended_corrective_action=(
-            "Deploy automated cleanup jobs to query requesters of inactive cases past 45 days, automatically archiving "
-            "stale requests and releasing reserved budget allocations."
+            "Review incomplete cases with process owners and distinguish genuinely stalled work from cases "
+            "whose completion events were not captured in the source log."
         ),
         evidence_and_explanation=(
-            f"Exact case tracking identified {abandoned_cases:,} incomplete cases out of {total_cases:,} total cases "
-            f"that terminated prior to reaching final 'Payment Completed' milestone."
+            f"The event log contains {incomplete_cases:,} cases without a recorded completion activity "
+            f"out of {total_cases:,} total cases. The event log alone cannot establish whether these cases "
+            f"were abandoned or are still in progress."
         ),
         estimated_impact_score=impact_score,
     )
@@ -441,18 +444,20 @@ def evaluate_sla_breach(
     config: RecommendationsConfig,
 ) -> Optional[RecommendationItem]:
     """
-    Evaluates whether cycle times frequently violate the 720h (30-day) SLA threshold.
+    Evaluates whether cycle times frequently violate the configured SLA threshold.
     Category: Compliance | Severity: MEDIUM / HIGH
     """
     total_cases = overview.total_purchase_cases
     if total_cases == 0:
         return None
 
+    eligible_cases = overview.completed_cases or total_cases
     breach_rate = overview.sla_breach_percentage
     if breach_rate <= config.sla_breach_threshold:
         return None
 
     breach_cases = overview.sla_breach_cases
+    affected_case_percentage = round_num(breach_cases / total_cases * 100.0, 2)
     severity = "HIGH" if breach_rate > 0.20 else "MEDIUM"
     weight = SEVERITY_WEIGHTS[severity]
     impact_score = round_num(weight * (breach_rate * 100.0) + (breach_cases * 0.05), 2)
@@ -468,21 +473,24 @@ def evaluate_sla_breach(
         ),
         supporting_metric="sla_breach_percentage",
         actual_metric_value=breach_rate,
-        threshold_or_baseline=f"Threshold: > {config.sla_breach_threshold * 100:.1f}% (Benchmark: < 10.0%)",
+        threshold_or_baseline=(
+            f"Configured threshold: > {config.sla_breach_threshold * 100:.1f}% "
+            "of cases with cycle-time measurements"
+        ),
         affected_case_count=breach_cases,
-        affected_case_percentage=round_num(breach_rate * 100.0, 2),
+        affected_case_percentage=affected_case_percentage,
         estimated_operational_impact=(
-            f"{breach_cases:,} cases ({breach_rate * 100.0:.1f}% of volume) missed the {overview.sla_hours:.0f}h SLA. "
-            f"Average cycle time is {overview.avg_cycle_time_hours:.1f}h (P90: {overview.p90_cycle_time_hours:.1f}h), "
-            f"straining vendor relationships and forfeiting prompt-payment discounts."
+            f"{breach_cases:,} of {eligible_cases:,} cycle-time cases ({breach_rate * 100.0:.1f}%) "
+            f"exceeded the {overview.sla_hours:.0f}-hour cycle-time target."
         ),
         recommended_corrective_action=(
-            "Establish SLA milestone alerts at 50% (360h) and 75% (540h) elapsed time. "
-            "Implement automated queue prioritization for invoices approaching due dates."
+            "Review the breached cases and identify the process stages with the largest measured delays; "
+            "consider stage-level alerts and queue prioritization for cases approaching the configured SLA."
         ),
         evidence_and_explanation=(
             f"Exact cycle time calculations measured {breach_cases:,} cases exceeding {overview.sla_hours:.0f} hours, "
-            f"with a median cycle time of {overview.median_cycle_time_hours:.1f} hours."
+            f"out of {eligible_cases:,} cases used for cycle-time analysis; median cycle time was "
+            f"{overview.median_cycle_time_hours:.1f} hours."
         ),
         estimated_impact_score=impact_score,
     )

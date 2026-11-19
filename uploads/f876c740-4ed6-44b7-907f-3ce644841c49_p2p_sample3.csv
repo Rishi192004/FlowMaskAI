@@ -1,0 +1,8 @@
+case_id,activity,timestamp,resource,amount
+PO-001,Purchase Requisition,2025-01-01T10:00:00Z,Alice,500.00
+PO-001,Manager Approval,2025-01-01T14:00:00Z,Bob,500.00
+PO-001,PO Created,2025-01-02T09:00:00Z,System,500.00
+PO-002,Purchase Requisition,2025-01-01T11:00:00Z,Charlie,1200.00
+PO-002,,2025-01-01T12:00:00Z,Charlie,1200.00
+PO-002,Manager Approval,2025-01-01T10:00:00Z,Diana,1200.00
+PO-002,Purchase Requisition,2025-01-01T11:00:00Z,Charlie,1200.00

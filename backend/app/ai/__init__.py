@@ -1,6 +1,7 @@
 """
 FlowMind — Grounded AI & Recommendations Package.
 """
+from app.ai.assistant import answer_assistant_query, classify_assistant_intent
 from app.ai.engine import generate_recommendations
 from app.ai.rules import (
     evaluate_approval_bottleneck,
@@ -21,6 +22,8 @@ from app.schemas.ai import (
 )
 
 __all__ = [
+    "answer_assistant_query",
+    "classify_assistant_intent",
     "generate_recommendations",
     "RecommendationsConfig",
     "RecommendationItem",

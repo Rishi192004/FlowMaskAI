@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     health,
     process,
     projects,
+    reports,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -24,3 +25,4 @@ api_router.include_router(analytics.router)
 api_router.include_router(process.router)
 api_router.include_router(conformance.router)
 api_router.include_router(ai.router)
+api_router.include_router(reports.router)

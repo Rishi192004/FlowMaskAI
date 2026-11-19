@@ -399,8 +399,10 @@ def get_bottleneck_analytics(
 
     # Transition SLA breaches per activity
     trans_by_act: Dict[str, List[float]] = defaultdict(list)
+    cases_by_act: Dict[str, set] = defaultdict(set)
     for t in transitions:
         trans_by_act[t["activity"]].append(t["waiting_time_hours"])
+        cases_by_act[t["activity"]].add(t["case_id"])
 
     sla_breach_map: Dict[str, float] = {}
     for act, times in trans_by_act.items():
@@ -452,6 +454,7 @@ def get_bottleneck_analytics(
             rework_rate=rew_rate,
             sla_breach_rate=breach_rate,
             transition_count=a.transition_count,
+            affected_case_count=len(cases_by_act.get(act, set())),
             reasons=reasons,
         ))
 

@@ -297,6 +297,7 @@ def test_evaluate_approval_bottleneck():
                 rework_rate=0.05,
                 sla_breach_rate=0.12,
                 transition_count=95,
+                affected_case_count=90,
                 reasons=["High average waiting time", "Frequent transition delay"],
             )
         ],
@@ -308,6 +309,50 @@ def test_evaluate_approval_bottleneck():
     assert rec.category == "EFFICIENCY"
     assert rec.severity == "HIGH"  # > 48h triggers HIGH
     assert rec.actual_metric_value == 54.5
+    assert rec.affected_case_count == 90
+
+
+def test_evaluate_approval_bottleneck_ignores_unrelated_top_stage():
+    overview = OverviewMetrics(
+        dataset_id=uuid.uuid4(),
+        total_purchase_cases=100,
+        total_events=700,
+        completed_cases=90,
+        incomplete_cases=10,
+        completion_rate=0.90,
+        avg_cycle_time_hours=180.0,
+        median_cycle_time_hours=140.0,
+        p90_cycle_time_hours=280.0,
+        rework_cases=5,
+        rework_percentage=0.05,
+        sla_hours=720.0,
+        sla_breach_cases=6,
+        sla_breach_percentage=0.06,
+        total_spend_usd=40000.0,
+    )
+    bottlenecks = BottlenecksResponse(
+        dataset_id=overview.dataset_id,
+        top_bottleneck="Invoice Received",
+        ranking_methodology="Composite delay and queue score",
+        bottlenecks=[
+            BottleneckItem(
+                rank=1,
+                activity="Invoice Received",
+                bottleneck_score=85.2,
+                avg_waiting_time_hours=54.5,
+                median_waiting_time_hours=48.0,
+                rework_rate=0.05,
+                sla_breach_rate=0.12,
+                transition_count=95,
+                affected_case_count=90,
+                reasons=["High average waiting time"],
+            )
+        ],
+    )
+
+    assert evaluate_approval_bottleneck(
+        bottlenecks, overview, RecommendationsConfig(approval_bottleneck_hours=24.0)
+    ) is None
 
 
 def test_evaluate_low_fpy():
@@ -340,7 +385,7 @@ def test_evaluate_low_fpy():
         active_rules=ConformanceRulesConfig(),
     )
 
-    rec = evaluate_low_fpy(conformance, overview, config)
+    rec = evaluate_low_fpy(overview, 64, config)
     assert rec is not None
     assert rec.rule_id == "LOW_FPY"
     assert rec.category == "QUALITY"
@@ -456,6 +501,9 @@ def seeded_recommendations_dataset(db: Session) -> Dataset:
         CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Purchase Requisition", timestamp=datetime(2025, 1, 4, 9, 0, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
         CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Manager Approval", timestamp=datetime(2025, 1, 5, 15, 0, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
         CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Purchase Order Created", timestamp=datetime(2025, 1, 5, 16, 0, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
+        CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Goods Received", timestamp=datetime(2025, 1, 5, 16, 15, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
+        CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Invoice Received", timestamp=datetime(2025, 1, 5, 16, 30, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
+        CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Invoice Verified", timestamp=datetime(2025, 1, 5, 17, 0, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
         CleanedEvent(dataset_id=ds.id, case_id="C-4", activity="Payment Completed", timestamp=datetime(2025, 1, 5, 18, 0, tzinfo=timezone.utc), extra_attributes={"amount": 3200.0}),
 
         # Case 5: Abandoned (incomplete, stopped at PO Created)
@@ -463,6 +511,9 @@ def seeded_recommendations_dataset(db: Session) -> Dataset:
         CleanedEvent(dataset_id=ds.id, case_id="C-5", activity="Manager Approval", timestamp=datetime(2025, 1, 6, 10, 0, tzinfo=timezone.utc), extra_attributes={"amount": 500.0}),
         CleanedEvent(dataset_id=ds.id, case_id="C-5", activity="Purchase Order Created", timestamp=datetime(2025, 1, 6, 12, 0, tzinfo=timezone.utc), extra_attributes={"amount": 500.0}),
     ]
+
+    for event_id, event in enumerate(events, start=1):
+        event.id = event_id
 
     db.add_all(events)
     db.commit()
@@ -475,7 +526,7 @@ def test_generate_recommendations_integration(db: Session, seeded_recommendation
         skip_approval_threshold=0.0,
         early_invoice_threshold=0.0,
         high_rework_threshold=0.05,
-        approval_bottleneck_hours=10.0,  # 30h wait on C-4 triggers this
+        approval_bottleneck_hours=5.0,  # Approval wait on C-4 raises the average above this.
         high_abandonment_threshold=0.10,  # 1/5 = 20% abandonment triggers this
     )
 
@@ -495,6 +546,11 @@ def test_generate_recommendations_integration(db: Session, seeded_recommendation
     assert "EARLY_INVOICE" in rule_ids
     assert "HIGH_REWORK" in rule_ids
     assert "HIGH_ABANDONMENT" in rule_ids
+    low_fpy = next(r for r in response.recommendations if r.rule_id == "LOW_FPY")
+    assert low_fpy.actual_metric_value == 0.2
+    assert low_fpy.affected_case_count == 4
+    bottleneck = next(r for r in response.recommendations if r.rule_id == "APPROVAL_BOTTLENECK")
+    assert bottleneck.affected_case_count == 4
 
     # Recommendations must be sorted descending by estimated_impact_score
     scores = [r.estimated_impact_score for r in response.recommendations]
@@ -508,6 +564,9 @@ def test_generate_recommendations_integration(db: Session, seeded_recommendation
         assert len(r.evidence_and_explanation) > 15
         assert r.affected_case_count > 0
         assert r.actual_metric_value > 0
+        assert r.threshold_or_baseline
+        assert r.supporting_metric
+        assert r.estimated_operational_impact
 
 
 def test_recommendations_api_endpoint(client: TestClient, seeded_recommendations_dataset: Dataset):

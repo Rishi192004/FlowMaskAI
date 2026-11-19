@@ -117,3 +117,42 @@ class RecommendationsResponse(BaseModel):
     rules_evaluated_count: int
     evaluation_timestamp: datetime
     active_config: RecommendationsConfig
+
+
+class AssistantIntentEnum(str, Enum):
+    BOTTLENECK = "BOTTLENECK"
+    VENDOR_SLA = "VENDOR_SLA"
+    CYCLE_TIME = "CYCLE_TIME"
+    REWORK = "REWORK"
+    CONFORMANCE = "CONFORMANCE"
+    PRIORITIES = "PRIORITIES"
+    UNSUPPORTED = "UNSUPPORTED"
+
+
+class AssistantQueryRequest(BaseModel):
+    dataset_id: uuid.UUID
+    question: str = Field(..., min_length=1, max_length=2000)
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    recommendations_config: RecommendationsConfig = Field(
+        default_factory=RecommendationsConfig
+    )
+
+
+class AssistantMetricFact(BaseModel):
+    key: str
+    label: str
+    value: str | int | float
+    display_value: str
+    source: str
+
+
+class AssistantQueryResponse(BaseModel):
+    dataset_id: uuid.UUID
+    intent: AssistantIntentEnum
+    answer: str
+    available: bool
+    measured_facts: List[AssistantMetricFact]
+    configured_baselines: List[AssistantMetricFact] = Field(default_factory=list)
+    recommendations: List[RecommendationItem]
+    generation_model: Optional[str] = None

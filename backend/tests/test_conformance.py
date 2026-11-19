@@ -96,7 +96,8 @@ def conformance_dataset(db: Session) -> Dataset:
         CleanedEvent(dataset_id=ds.id, case_id="PO-UNEXP", activity="Payment Completed", timestamp=datetime(2025, 1, 4, 11, 0, tzinfo=timezone.utc)),
     ]
 
-    for ev in events:
+    for event_id, ev in enumerate(events, start=1):
+        ev.id = event_id
         db.add(ev)
     db.commit()
 

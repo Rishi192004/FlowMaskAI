@@ -30,6 +30,7 @@ import { MetricCard } from '../components/common/MetricCard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { useFilters } from '../context/FilterContext';
 import {
+  AssistantMetricFact,
   BottlenecksResponse,
   ConformanceOverviewResponse,
   OverviewMetrics,
@@ -44,6 +45,9 @@ interface ChatMessage {
   timestamp: string;
   text: string;
   groundingMetrics?: Record<string, string | number>;
+  measuredFacts?: AssistantMetricFact[];
+  configuredBaselines?: AssistantMetricFact[];
+  recommendations?: RecommendationItem[];
   category?: string;
 }
 
@@ -149,96 +153,66 @@ export const AIProcessAssistant: React.FC = () => {
   }
 
   // ── Handle Assistant Conversation Queries ───────────────────────────────
-  const handleSendQuery = (queryText?: string) => {
-    const textToSend = queryText || chatInput;
-    if (!textToSend.trim() || !overview || !conformance || !bottlenecks) return;
+  const handleSendQuery = async (queryText?: string) => {
+    const textToSend = (queryText || chatInput).trim();
+    if (!textToSend || !selectedDatasetId || isTyping) return;
 
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: textToSend,
-    };
-
-    setChatMessages(prev => [...prev, userMsg]);
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        sender: 'user',
+        timestamp,
+        text: textToSend,
+      },
+    ]);
     setChatInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const q = textToSend.toLowerCase();
-      let replyText = '';
-      let metrics: Record<string, string | number> = {};
-      let category = 'Operational Analytics';
-
-      if (q.includes('bottleneck') || q.includes('delay') || q.includes('waiting')) {
-        const bnList = bottlenecks.bottlenecks.slice(0, 3);
-        const topBn = bnList[0];
-        replyText = `Based on computed timestamp deltas across ${overview.total_events.toLocaleString()} events, your primary bottleneck is **${topBn?.activity}** with an average waiting queue time of **${topBn?.avg_waiting_time_hours.toFixed(1)} hours** (Median: ${topBn?.median_waiting_time_hours.toFixed(1)}h).\n\nTop delay stages:\n` +
-          bnList.map((b, i) => `${i + 1}. **${b.activity}**: ${b.avg_waiting_time_hours.toFixed(1)}h avg wait (SLA breach rate: ${(b.sla_breach_rate * 100).toFixed(1)}%)`).join('\n');
-        metrics = {
-          'Top Bottleneck': topBn?.activity || 'N/A',
-          'Avg Wait Time': `${topBn?.avg_waiting_time_hours.toFixed(1)}h`,
-          'SLA Breach Rate': `${((topBn?.sla_breach_rate || 0) * 100).toFixed(1)}%`,
-        };
-        category = 'Bottleneck Analysis';
-      } else if (q.includes('compliance') || q.includes('deviation') || q.includes('violation') || q.includes('approval') || q.includes('maverick')) {
-        const devCount = conformance.deviant_cases;
-        const topDev = conformance.deviation_breakdown[0];
-        replyText = `Audit scan of reference P2P model reveals **${devCount} cases** (${(100 - conformance.conformance_percentage).toFixed(1)}%) deviated from standard procedure with an overall conformance fitness of **${(conformance.average_fitness_score * 100).toFixed(1)}%**.\n\nMost prevalent deviations:\n` +
-          conformance.deviation_breakdown.map((d, i) => `${i + 1}. **${d.deviation_type}** (${d.category}): ${d.affected_cases} cases (${d.percentage_of_cases}%) — ${d.description}`).join('\n');
-        metrics = {
-          'Conformant Cases': `${conformance.conformant_cases} (${conformance.conformance_percentage}%)`,
-          'Deviant Cases': devCount,
-          'Top Violation': topDev ? `${topDev.deviation_type} (${topDev.affected_cases} cases)` : 'None',
-        };
-        category = 'Conformance Audit';
-      } else if (q.includes('variant') || q.includes('path') || q.includes('pareto')) {
-        const vCount = variants?.unique_variants_count || 0;
-        const topVarPct = variants?.top_variant_percentage || 0;
-        replyText = `Process mining extracted **${vCount} unique execution paths** across ${overview.total_purchase_cases.toLocaleString()} cases.\n\nThe most frequent variant accounts for **${topVarPct}%** of total case volume.\n- **Top Path**: ${variants?.variants[0]?.variant_signature || 'N/A'}\n- **Second Path**: ${variants?.variants[1]?.variant_signature || 'N/A'}`;
-        metrics = {
-          'Unique Variants': vCount,
-          'Top Variant %': `${topVarPct}%`,
-          'Rare Variants': variants?.variants.filter(v => v.is_rare).length || 0,
-        };
-        category = 'Process Variants';
-      } else if (q.includes('vendor') || q.includes('supplier')) {
-        const topV = vendors?.vendors[0];
-        replyText = `Analysis across **${vendors?.total_vendors || 0} active suppliers** shows total spend of **$${(overview.total_spend_usd / 1000).toFixed(0)}k**.\n\n- Highest spend supplier: **${topV?.vendor_id}** ($${(topV?.total_spend_usd || 0).toLocaleString()})\n- Average supplier cycle time: **${topV?.avg_cycle_time_hours.toFixed(1)}h**\n- High-risk vendors (>25% SLA breach): **${vendors?.vendors.filter(v => v.sla_breach_rate > 0.25).length} suppliers**`;
-        metrics = {
-          'Total Suppliers': vendors?.total_vendors || 0,
-          'Highest Spend': topV?.vendor_id || 'N/A',
-          'SLA Breach Rate': `${((overview.sla_breach_cases / Math.max(1, overview.total_purchase_cases)) * 100).toFixed(1)}%`,
-        };
-        category = 'Vendor Performance';
-      } else {
-        replyText = `Summary of computed analytics for **${selectedDataset ? selectedDataset.name : 'Dataset'}**:\n- **Total Purchase Cases**: ${overview.total_purchase_cases.toLocaleString()}\n- **Completed Cases**: ${overview.completed_cases.toLocaleString()} (${(overview.completion_rate * 100).toFixed(1)}%)\n- **Average Cycle Time**: ${overview.avg_cycle_time_hours.toFixed(1)} hours (Median: ${overview.median_cycle_time_hours.toFixed(1)}h)\n- **Rework Rate**: ${(overview.rework_percentage * 100).toFixed(1)}% (${overview.rework_cases} cases)\n- **SLA Breach Rate**: ${(overview.sla_breach_percentage * 100).toFixed(1)}%\n- **Total Capital Spend**: $${overview.total_spend_usd.toLocaleString()}\n\nWhat specific dimension would you like to drill into?`;
-        metrics = {
-          'Total Cases': overview.total_purchase_cases,
-          'Cycle Time': `${overview.avg_cycle_time_hours.toFixed(1)}h`,
-          'Conformance': `${conformance.conformance_percentage}%`,
-        };
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        sender: 'assistant',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        text: replyText,
-        groundingMetrics: metrics,
-        category,
-      };
-
-      setChatMessages(prev => [...prev, assistantMsg]);
+    try {
+      const result = await aiApi.ask({
+        dataset_id: selectedDatasetId,
+        question: textToSend,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      });
+      setChatMessages(prev => [
+        ...prev,
+        {
+          id: `assistant-${Date.now()}`,
+          sender: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: result.answer,
+          measuredFacts: result.measured_facts,
+          configuredBaselines: result.configured_baselines,
+          recommendations: result.recommendations,
+          category: result.intent,
+        },
+      ]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'The assistant request failed.';
+      setChatMessages(prev => [
+        ...prev,
+        {
+          id: `assistant-error-${Date.now()}`,
+          sender: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: `I could not generate an answer: ${message}`,
+        },
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 400);
+    }
   };
 
   const sampleQueries = [
-    'What are the primary operational bottlenecks?',
-    'Summarize compliance deviations and control bypasses',
-    'Which process variants drive the most volume?',
-    'Which suppliers have the highest SLA breach rate?',
+    'What is our biggest bottleneck?',
+    'Which vendors have the highest SLA breach rate?',
+    'Why are cases taking longer than expected?',
+    'Which activities contribute most to rework?',
+    'What percentage of cases violate the reference process?',
+    'What actions should management prioritize?',
   ];
 
   return (
@@ -372,6 +346,56 @@ export const AIProcessAssistant: React.FC = () => {
                       ))}
                     </div>
                   )}
+
+                  {msg.measuredFacts && msg.measuredFacts.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-surface-border/60 space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                        Measured facts
+                      </p>
+                      {msg.measuredFacts.map(fact => (
+                        <div key={fact.key} className="flex justify-between gap-3 text-[10px]">
+                          <span className="text-slate-400">{fact.label}</span>
+                          <span className="font-mono text-emerald-200 text-right">{fact.display_value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {msg.configuredBaselines && msg.configuredBaselines.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-surface-border/60 space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+                        Configured baselines
+                      </p>
+                      {msg.configuredBaselines.map(baseline => (
+                        <div key={baseline.key} className="flex justify-between gap-3 text-[10px]">
+                          <span className="text-slate-400">{baseline.label}</span>
+                          <span className="font-mono text-sky-200 text-right">{baseline.display_value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {msg.recommendations && msg.recommendations.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-surface-border/60 space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                        Recommendation engine actions
+                      </p>
+                      {msg.recommendations.slice(0, 3).map(recommendation => (
+                        <div key={recommendation.recommendation_id} className="rounded border border-surface-border bg-surface p-2">
+                          <p className="text-[10px] font-semibold text-slate-100">
+                            {recommendation.severity} · {recommendation.rule_id}
+                          </p>
+                          <p className="mt-1 text-[10px] text-slate-300">{recommendation.business_problem}</p>
+                          <p className="mt-1 text-[10px] text-indigo-200">
+                            {recommendation.recommended_corrective_action}
+                          </p>
+                          <p className="mt-1 text-[9px] text-slate-500">
+                            Evidence: {recommendation.evidence_and_explanation}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {msg.sender === 'user' && (
@@ -385,7 +409,7 @@ export const AIProcessAssistant: React.FC = () => {
             {isTyping && (
               <div className="flex gap-3 items-center text-xs text-slate-400 italic">
                 <Bot className="w-4 h-4 text-indigo-400 animate-spin" />
-                <span>Formulating grounded response from process metrics...</span>
+                <span>Retrieving metrics and asking the local model to summarize...</span>
               </div>
             )}
           </div>

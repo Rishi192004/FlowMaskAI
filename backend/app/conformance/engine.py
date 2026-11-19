@@ -251,6 +251,15 @@ def get_conformance_overview_response(
         end_date=end_date,
     )
 
+    return summarize_conformance_results(case_results, dataset_id, active_rules)
+
+
+def summarize_conformance_results(
+    case_results: List[CaseDeviationItem],
+    dataset_id: uuid.UUID,
+    active_rules: ConformanceRulesConfig,
+) -> ConformanceOverviewResponse:
+    """Builds aggregate conformance metrics from already evaluated case records."""
     total_c = len(case_results)
     if total_c == 0:
         return ConformanceOverviewResponse(

@@ -107,6 +107,7 @@ class BottleneckItem(BaseModel):
     rework_rate: float
     sla_breach_rate: float
     transition_count: int
+    affected_case_count: int = 0
     reasons: List[str]
 
 

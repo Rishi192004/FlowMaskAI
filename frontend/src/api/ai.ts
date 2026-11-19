@@ -1,5 +1,9 @@
 import { apiClient } from './client';
-import { RecommendationsResponse } from '../types/api';
+import {
+  AssistantQueryRequest,
+  AssistantQueryResponse,
+  RecommendationsResponse,
+} from '../types/api';
 
 export interface RecommendationsFilterParams {
   dataset_id: string;
@@ -17,6 +21,14 @@ export interface RecommendationsFilterParams {
 }
 
 export const aiApi = {
+  ask: async (request: AssistantQueryRequest) => {
+    return apiClient<AssistantQueryResponse>('/ai/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  },
+
   getRecommendations: async (params: RecommendationsFilterParams) => {
     return apiClient<RecommendationsResponse>('/ai/recommendations', { params });
   },

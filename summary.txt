@@ -1,160 +1,229 @@
-================================================================================
-FLOWMIND (FLOWSENSE AI) — END-TO-END PROJECT STATUS SUMMARY
-================================================================================
-Document Updated: 2026-11-19
-Repository: flowsense_ai (FlowMind Platform)
-Domain: Purchase-to-Pay (P2P) Process Mining & Operational Analytics
+FLOWMIND (FLOWSENSE AI) - PROJECT SUMMARY
+Updated: 2026-11-19
+Repository: Rishi192004/FlowMaskAI
+Domain: Purchase-to-Pay (P2P) Process Mining and Operational Analytics
 
---------------------------------------------------------------------------------
-1. EXECUTIVE SUMMARY & PROJECT PURPOSE
---------------------------------------------------------------------------------
-FlowMind is an enterprise-grade Process Mining and Operational Analytics Platform.
-Its core mission is to ingest raw enterprise event logs (specifically Purchase-to-Pay / P2P),
-reconstruct actual as-executed business workflows, quantify operational bottlenecks,
-detect process deviations and compliance breaches against a reference standard, and 
-provide evidence-based recommendations grounded strictly in computed metrics.
+===============================================================================
+1. PROJECT OVERVIEW
+===============================================================================
+FlowMind is a process-mining platform for analyzing purchase-to-pay event logs.
+It ingests raw events, normalizes them into case/activity/timestamp records,
+reconstructs observed workflows, calculates operational metrics, checks process
+conformance, and presents evidence-backed recommendations.
 
-Target P2P Reference Flow:
-  [Purchase Requisition] ──> [Manager Approval] ──> [Purchase Order Created]
-       ──> [Goods Received] ──> [Invoice Received] ──> [Invoice Verified]
-       ──> [Payment Completed]
+The reference P2P flow is:
+Purchase Requisition -> Manager Approval -> Purchase Order Created ->
+Goods Received -> Invoice Received -> Invoice Verified -> Payment Completed
 
---------------------------------------------------------------------------------
-2. CHRONOLOGICAL TIMELINE OF WHAT HAS BEEN DONE
---------------------------------------------------------------------------------
-• Phase 0 — Product Planning & Architecture (Commit: e8767cc)
-  - Comprehensive PRD, system architecture, PM4Py pipeline contracts, database schema,
-    API specifications, and phase-wise acceptance criteria (FlowMind_Planning.md).
+The repository includes a synthetic P2P sample with more than 100,000 events.
+This sample supports repeatable development and testing; it is not evidence of
+production customer outcomes.
 
-• Phase 1 — Scaffolding & Backend Foundation (Commit: e8767cc)
-  - FastAPI app factory with CORS, structured JSON logging, and custom exceptions.
-  - JWT authentication (register, login, refresh, /me) via Passlib (Bcrypt) and Python-Jose.
-  - SQLAlchemy 2.0 ORM + Alembic migrations for PostgreSQL.
-  - Health check probe (/api/v1/health) and Project lifecycle CRUD endpoints.
-  - Docker Compose orchestration (Postgres, Backend, Frontend).
+INTERVIEW-READY PROJECT STORY
+-------------------------------------------------------------------------------
+60-90 second answer:
+"I built FlowMind, a purchase-to-pay process-mining platform that turns
+inconsistent event logs into measurable workflow insights. The ingestion
+pipeline maps source columns, normalizes timestamps, checks data quality,
+deduplicates events, and stores case-activity-time records. I then use SQL and
+PM4Py to analyze cycle time, activity delays, rework, process variants, SLA
+breaches, and conformance against a reference process. FastAPI exposes those
+computed results, while a configurable rules engine produces evidence-backed
+recommendations. For natural-language questions, the assistant routes a fixed
+intent to existing analytics services and uses local Ollama only to phrase an
+answer from structured evidence. Metrics stay server-computed; the model has no
+SQL access. The sample data is synthetic, so I describe the result as a working,
+tested analytics workflow rather than claiming production savings."
 
-• Phase 2 & 3 — ETL & Event-Log Processing Pipeline (Commit: 65c65d3)
-  - Alembic migration (0002) for datasets, events, etl_executions, and data_quality_issues.
-  - Streaming CSV delimiter detector and automatic column synonym mapping.
-  - Data normalizer (activity acronym preservation, UTC timestamp parsing).
-  - Anomaly detector & validator (duplicate signatures, out-of-order timestamps, null values).
-  - Chunked ETL loading pipeline (CHUNK_SIZE = 5000) with batch database flushes.
-  - Synthetic 102,000-event P2P sample dataset (data/sample/p2p_100k_events.csv) with
-    realistic process paths (standard, skipped approval, rework, early invoicing).
+STAR framing:
+- Situation: P2P event exports can have inconsistent columns, duplicate events,
+  missing values, and timestamps that do not reflect a valid event order.
+- Task: Build a repeatable path from raw events to process analysis and
+  recommendations that users can inspect.
+- Action: Implement CSV ingestion and quality checks, case-level analytics,
+  PM4Py discovery/conformance, typed FastAPI endpoints, configurable rules,
+  and a locally hosted natural-language interface.
+- Result: The platform turns event records into analysis-ready logs and
+  traceable metrics/recommendations. Do not claim a measured reduction in
+  processing time, cost, or risk; this repository does not establish such an
+  outcome.
 
-• Phase 4 — Operational Analytics Engine (Commit: 65c65d3)
-  - High-performance SQL queries + Pandas analytical service:
-    * Case throughput (total, completed, open/in-progress).
-    * Cycle time percentiles (min, max, mean, median, P50, P75, P90, P95, 10-bin histogram).
-    * Stage-by-stage waiting time rankings and bottleneck identification.
-    * Rework rates and activity repetition loops.
-    * SLA compliance tracking (target vs actual duration).
-    * Multidimensional vendor performance (spend, case count, avg duration, breach rate).
-  - Analytics endpoints exposed at /api/v1/analytics/*.
+Concrete ETL example from the attached small CSV:
+- It contains a blank activity, a repeated event row, and an approval timestamp
+  earlier than the preceding requisition event. Use these as examples of data
+  quality checks, not as a basis for KPI claims. The sample is too small and
+  incomplete to infer SLA performance, abandonment, or business impact.
 
-• Phase 5 — Process Mining Engine via PM4Py (Commit: 6c77bbf)
-  - DB to PM4Py EventLog and DataFrame converter.
-  - Directly-Follows Graph (DFG) discovery with edge frequencies and transition durations.
-  - Inductive Miner Petri Net derivation with structural fallback.
-  - Trace variant discovery, Pareto analysis, and outlier detection.
-  - Differential process comparison across departments, vendors, or time periods.
-  - Process mining endpoints exposed at /api/v1/process/*.
+Likely follow-up answers:
+- "How do you prevent AI hallucinations?" Intent classification selects fixed
+  service calls; metrics and recommendations are serialized as evidence; the
+  model has no database/SQL tool; its narrative is kept separate and numeric
+  claims are rejected. Unsupported questions return an explicit unavailable
+  response.
+- "How do you calculate first-pass yield?" It is based on case-level
+  conformance and repeated-activity records, rather than combining aggregate
+  percentages.
+- "What is the main limitation?" The sample is synthetic, the full backend
+  suite has existing environment/fixture failures, and live Docker end-to-end
+  validation remains outstanding.
 
-• Phase 6 — Conformance Checking & Deviation Detection (Commit: 6d6301f, cfd299b)
-  - Configurable P2P reference workflow rules (app/conformance/rules.py).
-  - Token replay and trace alignment heuristic engine (app/conformance/engine.py):
-    * Detects Skipped Manager Approvals (HIGH severity).
-    * Detects Early Invoicing / early invoice verification before goods receipt (HIGH severity).
-    * Detects Skipped Invoice Verification before payment (HIGH severity).
-    * Detects Repeated Approvals / rework loops (MEDIUM severity).
-    * Detects Incomplete / Abandoned cases without payment (MEDIUM severity).
-    * Detects Out-of-order activities including Maverick Buying (MEDIUM severity).
-    * Detects Unexpected non-standard activities (MEDIUM severity).
-    * Computes token-replay fitness approximation scores (0.0 to 1.0).
-  - Conformance endpoints exposed at /api/v1/conformance/*.
+===============================================================================
+2. TECHNOLOGY
+===============================================================================
+- Backend: Python, FastAPI, SQLAlchemy 2, Pydantic
+- Database and migrations: PostgreSQL, Alembic
+- Data analysis: SQL, Pandas, NumPy
+- Process mining: PM4Py
+- Frontend: React 18, TypeScript, Vite, Tailwind CSS, Recharts
+- Authentication: JWT, python-jose, Passlib/Bcrypt
+- Local orchestration: Docker Compose
+- Tests: pytest, FastAPI TestClient, SQLite test database
 
-• Phase 7 / Frontend Integration (Commit: 044d635)
-  - Created frontend/src/main.tsx and frontend/src/App.tsx with full layout and routing.
-  - Created frontend/src/index.css with dark slate/navy theme and custom scrollbars.
-  - Implemented VendorPerformance.tsx with spend and SLA distribution charts.
-  - Implemented AIProcessAssistant.tsx with interactive grounded chat and recommendation feeds.
-  - Fixed relative import paths across all 10 page views.
-  - Verified full TypeScript compilation and production build (tsc && vite build).
+===============================================================================
+3. IMPLEMENTED CAPABILITIES
+===============================================================================
 
-• Phase 8 / Grounded Recommendations Engine (Commit: cfd299b)
-  - Implemented complete backend/app/ai module:
-    * backend/app/schemas/ai.py: Pydantic schemas for RecommendationItem, RecommendationsConfig, RecommendationsResponse.
-    * backend/app/ai/rules.py: 8 independent, configurable rule evaluators:
-      1. SKIP_APPROVAL (Compliance)
-      2. EARLY_INVOICE (Financial Risk)
-      3. SKIP_VERIFICATION (Compliance)
-      4. HIGH_REWORK (Quality)
-      5. APPROVAL_BOTTLENECK (Efficiency)
-      6. LOW_FPY (Quality)
-      7. HIGH_ABANDONMENT (Efficiency & Risk)
-      8. SLA_BREACH (Compliance)
-    * backend/app/ai/engine.py: generate_recommendations() orchestrates analytical inputs,
-      evaluates rules, and ranks action items by estimated impact score.
-    * backend/app/api/v1/endpoints/ai.py: GET /api/v1/ai/recommendations endpoint.
-    * backend/tests/test_recommendations.py: Comprehensive unit and integration test suite.
-    * frontend/src/api/ai.ts: Client integration feeding real backend recommendations directly
-      into the AI Process Assistant page.
+Application foundation
+- FastAPI application, API versioning, structured logging, CORS, and health check.
+- JWT registration, login, refresh, and current-user flows.
+- Project and dataset lifecycle endpoints.
+- SQLAlchemy models and Alembic migration support.
 
---------------------------------------------------------------------------------
-3. WHAT HAS BEEN COMPLETED (DETAILED INVENTORY)
---------------------------------------------------------------------------------
-[x] Architecture & Documentation (FlowMind_Planning.md, summary.txt)
-[x] FastAPI App Factory & Structured JSON Logging
-[x] JWT Authentication & User Management (register, login, refresh, /me)
-[x] Project CRUD & Dataset Management APIs
-[x] CSV Ingestion, Delimiter Sniffer & Schema Mapping
-[x] Data Validation, Normalization & Chunked Database Ingestion
-[x] Synthetic 100K-Event P2P Event Log (p2p_100k_events.csv)
-[x] Operational Analytics (Throughput, Cycle Time Percentiles, Bottlenecks, Rework, SLA, Vendors)
-[x] PM4Py Process Mining (DFG, Inductive Miner Petri Nets, Variants, Comparison)
-[x] Conformance Checking (Skipped approval, early invoice, skipped verify, rework, abandonment)
-[x] 10 Frontend Pages with Vite + React 18 + TypeScript + Tailwind CSS:
-    1. OverviewDashboard.tsx
-    2. DatasetManagement.tsx
-    3. ETLProcessing.tsx
-    4. DataQualityReport.tsx
-    5. ProcessDiscovery.tsx
-    6. VariantExplorer.tsx
-    7. ConformanceChecking.tsx
-    8. BottleneckAnalysis.tsx
-    9. VendorPerformance.tsx
-    10. AIProcessAssistant.tsx
-[x] Custom SVG Interactive Process Map Canvas with Staged Topological Coordinates
-[x] Grounded AI Recommendations Engine (8 configurable rules, impact scoring, zero fabrication)
-[x] Automated Unit & Integration Tests (auth, projects, security, health, etl, analytics, mining, conformance, recommendations)
+Event ingestion and ETL
+- CSV delimiter detection and source-column synonym mapping.
+- Timestamp normalization and activity-name preservation.
+- Validation for missing data, duplicate event signatures, and out-of-order
+  timestamps.
+- Chunked database loading with ETL execution and data-quality records.
+- Synthetic P2P event log with standard and deviating process variants.
 
---------------------------------------------------------------------------------
-4. WHAT IS LEFT TO DO ACCORDING TO THE ROADMAP
---------------------------------------------------------------------------------
-1. EXPORT & REPORTING MODULE:
-   • PDF KPI summary export (server-side rendering via WeasyPrint/ReportLab or client printable view).
-   • Filtered CSV event log download endpoint (/api/v1/datasets/{id}/export/csv).
-   • Conformance audit report JSON download endpoint (/api/v1/conformance/export/json).
-   • Connecting download buttons in the frontend UI.
+Operational analytics
+- Case, event, completion, and incomplete-case counts.
+- Cycle-time measurements and percentiles.
+- Activity waiting-time calculations and bottleneck rankings.
+- Repeated-activity/rework counts and rates.
+- SLA breach measurements using a configurable cycle-time target.
+- Vendor and department summaries, including spend and performance metrics
+  when those attributes exist in the source data.
 
-2. RUNTIME ENVIRONMENT SETUP & LIVE CONTAINER TEST:
-   • Create backend local .venv and install requirements.txt so pytest can run on host OS.
-   • Execute 'docker compose up --build' to test all 3 containers (postgres, backend, frontend) live.
-   • Run full end-to-end integration test with the 100k sample dataset inside Docker Compose.
+Process mining and conformance
+- Conversion of stored events to PM4Py event-log and dataframe formats.
+- Directly-Follows Graph discovery and transition timing.
+- Inductive Miner Petri-net discovery with a structural fallback.
+- Variant discovery, frequency/Pareto analysis, outlier detection, and
+  comparison across supported dataset dimensions.
+- Configurable reference-flow conformance checks for skipped approval,
+  early invoice verification, skipped invoice verification, repeated approval,
+  incomplete cases, out-of-order activities, and unexpected activities.
+- Case-level evidence and a token-replay fitness approximation.
 
---------------------------------------------------------------------------------
-5. SUMMARY SCORECARD
---------------------------------------------------------------------------------
-Module / Phase                     Status         Completion
-─────────────────────────────────────────────────────────────
-Phase 0: Planning & PRD            COMPLETED       100%
-Phase 1: Scaffolding & Auth        COMPLETED       100%
-Phase 2/3: ETL & Ingestion         COMPLETED       100%
-Phase 4: Operational Analytics     COMPLETED       100%
-Phase 5: PM4Py Process Mining      COMPLETED       100%
-Phase 6: Conformance Checking      COMPLETED       100%
-Phase 7: Frontend Dashboards       COMPLETED       100% (10/10 pages + main/App)
-Phase 8: Grounded AI Engine        COMPLETED       100% (8 rules + API + tests)
-Export & Reporting (PDF/CSV)       PENDING           0%
-Docker Live Verification           PENDING          50%
-================================================================================
+Grounded recommendations
+- Eight independently evaluated rules: SKIP_APPROVAL, EARLY_INVOICE,
+  SKIP_VERIFICATION, HIGH_REWORK, APPROVAL_BOTTLENECK, LOW_FPY,
+  HIGH_ABANDONMENT, and SLA_BREACH.
+- Rule thresholds are configurable through the recommendations API.
+- Recommendation evidence, metric values, threshold comparisons, case counts,
+  corrective actions, severity, and ranking scores are returned in a typed
+  response.
+- First-pass yield is computed from conformant case records with no repeated
+  activities; it is not estimated by combining aggregate rates.
+- Bottleneck case counts use distinct cases, not transition counts.
+- Cases without a payment event are reported as incomplete; the event log alone
+  cannot establish that they were abandoned or are still active.
+- Impact descriptions use observed counts and timings. The engine does not
+  claim unmeasured savings or fabricate financial outcomes.
+
+Frontend
+- Ten React/TypeScript pages: overview, dataset management, ETL, data quality,
+  process discovery, variants, conformance, bottlenecks, vendor performance,
+  and the AI Process Assistant.
+- Analytics visualizations, process views, and recommendation feed are
+  connected to backend data.
+
+AI Process Assistant (Phase 3)
+- POST /api/v1/ai/assistant/query classifies supported questions into fixed
+  intents and routes them to existing analytics or conformance services.
+- Supports bottleneck, vendor SLA, cycle-time, rework, reference-process
+  conformance, and management-priority questions.
+- Management-priority questions use the configurable recommendation engine.
+- Uses local Ollama generation configured with OLLAMA_HOST and OLLAMA_MODEL
+  (default model: qwen3:8b). No external LLM provider is used.
+- Computed facts, configured baselines, and recommendation records are returned
+  separately from the generated narrative. Narrative numeric claims are
+  rejected; unsupported intents and unavailable data receive explicit responses.
+- The LLM has no SQL or database tool access. Intent handlers call fixed
+  analytics services; user text is never converted into SQL.
+- The React assistant now sends queries to this API and renders measured facts
+  separately from recommendation-engine actions.
+
+===============================================================================
+4. EXPORT AND REPORTING (PHASE 4)
+===============================================================================
+- Added filtered, streamed cleaned-event CSV export with dataset and date-range
+  metadata in the download.
+- Added a PDF KPI report with dataset details, selected date filters, generated
+  timestamp, overview and cycle-time KPIs, top bottlenecks, and conformance
+  deviations.
+- Added a JSON conformance audit report with dataset/filter metadata, generated
+  timestamp, overview and cycle-time KPIs, bottlenecks, active conformance
+  rules, and deviation breakdown.
+- Mounted report routes at both /api/v1/reports and /api/reports.
+- Added CSV, PDF, and JSON download controls to the overview dashboard; controls
+  use the selected dataset and date range and surface download errors.
+
+===============================================================================
+5. VALIDATION STATUS
+===============================================================================
+- Latest targeted backend validation: 43 tests passed across reports, assistant,
+  recommendations, conformance, and analytics.
+- The targeted tests cover rule evaluation, database-backed recommendation
+  generation, intent classification, the assistant API response, Ollama request
+  handling, numeric-claim rejection, filtered CSV output, PDF generation, JSON
+  report contents, and analytics/conformance regressions.
+- TypeScript compilation and the Vite production build passed after adding
+  download controls. Vite reported its existing large-chunk advisory.
+- The API tests mock Ollama; a live local Ollama model call has not been
+  required to validate the assistant logic. A separate local smoke test
+  confirmed Ollama 0.40.15 and qwen3:8b are available; the generated response
+  explicitly stated that empty evidence was insufficient.
+- Full backend-suite attempt: 58 passed, 8 failed, and 14 errors. The unrelated
+  failures include the installed Passlib/bcrypt incompatibility and SQLite
+  `cleaned_events.id` autoincrement failures in existing ETL/process-mining
+  tests.
+- Live Docker end-to-end verification remains outstanding.
+
+===============================================================================
+6. REMAINING WORK
+===============================================================================
+1. Resolve the existing Passlib/bcrypt and SQLite fixture compatibility issues,
+   then rerun the full backend suite.
+2. Run Docker Compose and validate the PostgreSQL, backend, and frontend services
+   together, including an end-to-end import and analysis of the sample event log.
+
+===============================================================================
+7. INTERVIEW AND RESUME CLOSE
+===============================================================================
+FlowMind | Purchase-to-Pay Process Mining and Operational Analytics
+Python, SQL, PostgreSQL, FastAPI, PM4Py, React, TypeScript
+
+- Built a chunked Python/SQL ETL pipeline to validate, deduplicate, normalize,
+  and load a 100K+ synthetic P2P event log into case-activity-timestamp records.
+- Used PM4Py process discovery and conformance analysis with SQL-backed
+  cycle-time, waiting-time, rework, SLA, and vendor analytics to identify
+  measured workflow deviations and bottlenecks.
+- Delivered FastAPI analytics and report-download APIs, a local Ollama
+  natural-language interface grounded in structured results, and eight
+  configurable recommendation rules; the LLM does not execute SQL or supply KPI
+  values.
+
+Interview accuracy notes:
+- Call the 100K+ records synthetic development data, not production/customer
+  data.
+- Describe the output as computed findings and recommendations; do not claim
+  quantified savings, customer impact, or production adoption.
+- Validation completed: 43 targeted backend tests passed and the frontend
+  production build passed. The full backend run had 58 passed, 8 failed, and
+  14 errors, including existing Passlib/bcrypt and SQLite fixture issues.
+- Ollama 0.40.15 and qwen3:8b were available for a local smoke test; full
+  Docker end-to-end validation remains outstanding.
+===============================================================================

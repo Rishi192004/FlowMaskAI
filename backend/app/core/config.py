@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 50
 
+    OLLAMA_HOST: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "qwen3:8b"
+    OLLAMA_TIMEOUT_SECONDS: float = 120.0
+
     @property
     def is_development(self) -> bool:
         return self.APP_ENV.lower() == "development"

@@ -4,6 +4,7 @@ import {
   CheckCircle,
   Clock,
   DollarSign,
+  Download,
   FileText,
   Repeat,
   TrendingUp,
@@ -24,6 +25,7 @@ import {
 } from 'recharts';
 import { analyticsApi } from '../api/analytics';
 import { processApi } from '../api/process';
+import { reportsApi } from '../api/reports';
 import { EmptyState, ErrorState, LoadingState } from '../components/common/FeedbackStates';
 import { MetricCard } from '../components/common/MetricCard';
 import { StatusBadge } from '../components/common/StatusBadge';
@@ -38,6 +40,8 @@ export const OverviewDashboard: React.FC = () => {
   const [variants, setVariants] = useState<ProcessVariantsResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     if (!selectedDatasetId) {
@@ -75,6 +79,34 @@ export const OverviewDashboard: React.FC = () => {
     fetchDashboardData();
   }, [selectedDatasetId, startDate, endDate]);
 
+  const downloadReport = async (
+    report: 'events-csv' | 'kpi-pdf' | 'conformance-json',
+    request: typeof reportsApi.downloadEventsCsv,
+  ) => {
+    if (!selectedDatasetId || downloadingReport) return;
+    setDownloadingReport(report);
+    setDownloadError(null);
+    try {
+      const result = await request({
+        dataset_id: selectedDatasetId,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      });
+      const objectUrl = URL.createObjectURL(result.blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = result.filename || `flowmind_${report}_${selectedDatasetId}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err: unknown) {
+      setDownloadError(err instanceof Error ? err.message : 'The report download failed.');
+    } finally {
+      setDownloadingReport(null);
+    }
+  };
+
   if (!selectedDatasetId) {
     return (
       <EmptyState
@@ -95,12 +127,38 @@ export const OverviewDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-slate-100">Operational Overview</h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Real-time process mining KPIs and operational metrics calculated from verified event logs.
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-slate-100">Operational Overview</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Real-time process mining KPIs and operational metrics calculated from verified event logs.
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Downloads use the selected dataset and date range.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['events-csv', 'CSV events', reportsApi.downloadEventsCsv],
+            ['kpi-pdf', 'PDF KPI report', reportsApi.downloadKpiPdf],
+            ['conformance-json', 'JSON audit', reportsApi.downloadConformanceJson],
+          ] as const).map(([report, label, request]) => (
+            <button
+              key={report}
+              type="button"
+              onClick={() => downloadReport(report, request)}
+              disabled={Boolean(downloadingReport)}
+              className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-card px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-3.5 w-3.5 text-blue-400" />
+              {downloadingReport === report ? 'Preparing...' : label}
+            </button>
+          ))}
+        </div>
       </div>
+      {downloadError && (
+        <p role="alert" className="text-xs text-rose-400">{downloadError}</p>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

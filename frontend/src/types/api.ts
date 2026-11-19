@@ -436,3 +436,38 @@ export interface RecommendationsResponse {
   rules_evaluated_count: number;
   evaluation_timestamp: string;
 }
+
+export type AssistantIntent =
+  | 'BOTTLENECK'
+  | 'VENDOR_SLA'
+  | 'CYCLE_TIME'
+  | 'REWORK'
+  | 'CONFORMANCE'
+  | 'PRIORITIES'
+  | 'UNSUPPORTED';
+
+export interface AssistantMetricFact {
+  key: string;
+  label: string;
+  value: string | number;
+  display_value: string;
+  source: string;
+}
+
+export interface AssistantQueryRequest {
+  dataset_id: string;
+  question: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface AssistantQueryResponse {
+  dataset_id: string;
+  intent: AssistantIntent;
+  answer: string;
+  available: boolean;
+  measured_facts: AssistantMetricFact[];
+  configured_baselines: AssistantMetricFact[];
+  recommendations: RecommendationItem[];
+  generation_model?: string | null;
+}

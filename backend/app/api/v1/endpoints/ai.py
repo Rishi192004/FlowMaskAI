@@ -9,14 +9,41 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.ai.assistant import answer_assistant_query
 from app.ai.engine import generate_recommendations
+from app.ai.llm import AssistantGenerationError
 from app.db.session import get_db
-from app.schemas.ai import RecommendationsConfig, RecommendationsResponse
+from app.schemas.ai import (
+    AssistantQueryRequest,
+    AssistantQueryResponse,
+    RecommendationsConfig,
+    RecommendationsResponse,
+)
 
 router = APIRouter(prefix="/ai", tags=["AI & Recommendations"])
+
+
+@router.post(
+    "/assistant/query",
+    response_model=AssistantQueryResponse,
+    summary="Answer a natural-language process analytics question",
+    description=(
+        "Classifies a supported intent, retrieves measured values from analytics services, "
+        "and uses local Ollama only to phrase a non-numeric narrative. Metric facts and "
+        "recommendations are returned separately from the model-generated text."
+    ),
+)
+def post_assistant_query(
+    request: AssistantQueryRequest,
+    db: Session = Depends(get_db),
+) -> AssistantQueryResponse:
+    try:
+        return answer_assistant_query(db, request)
+    except AssistantGenerationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.get(

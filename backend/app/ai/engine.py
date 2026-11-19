@@ -21,12 +21,13 @@ from app.ai.rules import (
     evaluate_skip_verification,
     evaluate_sla_breach,
 )
+from app.analytics.queries import fetch_rework_sql
 from app.analytics.service import (
     get_bottleneck_analytics,
     get_overview_analytics,
     get_rework_analytics,
 )
-from app.conformance.engine import get_conformance_overview_response
+from app.conformance.engine import run_conformance_check, summarize_conformance_results
 from app.core.exceptions import NotFoundError
 from app.models.dataset import Dataset
 from app.schemas.ai import (
@@ -62,12 +63,13 @@ def generate_recommendations(
         sla_hours=active_config.sla_hours,
     )
 
-    conformance = get_conformance_overview_response(
+    case_results, conformance_rules = run_conformance_check(
         db=db,
         dataset_id=dataset_id,
         start_date=start_date,
         end_date=end_date,
     )
+    conformance = summarize_conformance_results(case_results, dataset_id, conformance_rules)
 
     bottlenecks = get_bottleneck_analytics(
         db=db,
@@ -83,6 +85,13 @@ def generate_recommendations(
         start_date=start_date,
         end_date=end_date,
     )
+    rework_case_ids = {
+        row["case_id"] for row in fetch_rework_sql(db, dataset_id, start_date, end_date)
+    }
+    first_pass_case_count = sum(
+        1 for case in case_results
+        if case.is_conformant and case.case_id not in rework_case_ids
+    )
 
     # 2. Evaluate all 8 recommendation rules
     rules_to_run = [
@@ -91,7 +100,7 @@ def generate_recommendations(
         evaluate_skip_verification(conformance, overview, active_config),
         evaluate_high_rework(overview, rework, active_config),
         evaluate_approval_bottleneck(bottlenecks, overview, active_config),
-        evaluate_low_fpy(conformance, overview, active_config),
+        evaluate_low_fpy(overview, first_pass_case_count, active_config),
         evaluate_high_abandonment(overview, active_config),
         evaluate_sla_breach(overview, active_config),
     ]
